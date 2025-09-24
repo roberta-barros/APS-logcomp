@@ -1,0 +1,126 @@
+(* =========================
+   Microl — Gramática EBNF
+   ========================= *)
+
+programa        = { declaracao | comando } EOF ;
+
+(* ---------- Declarações ---------- *)
+
+declaracao      = decl_var
+                | decl_const
+                | decl_sensor
+                | decl_reg
+                | decl_func
+                ;
+
+decl_var        = "let" ident [ ":" tipo ] [ "=" expressao ] ";" ;
+decl_const      = "const" ident [ ":" tipo ] "=" expressao ";" ;
+decl_sensor     = "sensor" lista_idents [ ":" tipo ] ";" ;
+decl_reg        = "register" lista_idents [ ":" tipo ] ";" ;
+
+decl_func       = "fn" ident "(" [ lista_params ] ")"
+                  [ ":" tipo ]
+                  bloco ;
+
+lista_params    = parametro { "," parametro } ;
+parametro       = ident [ ":" tipo ] ;
+
+tipo            = "int" | "bool" | "byte" | tipo_array ;
+tipo_array      = tipo_base "[" inteiro "]" ;
+tipo_base       = "int" | "bool" | "byte" ;
+
+lista_idents    = ident { "," ident } ;
+
+(* ---------- Comandos ---------- *)
+
+comando         = bloco
+                | cmd_if
+                | cmd_while
+                | cmd_for
+                | cmd_repeat
+                | cmd_atribuicao
+                | cmd_instr
+                | cmd_print
+                | cmd_return
+                | "break"  ";"
+                | "continue" ";"
+                | ";"               (* comando vazio *)
+                ;
+
+bloco           = "{" { declaracao | comando } "}" ;
+
+cmd_if          = "if" "(" expressao ")" comando
+                  { "elif" "(" expressao ")" comando }
+                  [ "else" comando ] ;
+
+cmd_while       = "while" "(" expressao ")" comando ;
+
+cmd_for         = "for" "(" [ init_for ] ";" [ expressao ] ";" [ atualiza_for ] ")"
+                  comando ;
+init_for        = decl_var | lista_atr ;
+atualiza_for    = lista_atr ;
+
+cmd_repeat      = "repeat" comando "until" "(" expressao ")" ";" ;
+
+cmd_print       = "print" "(" lista_args ")" ";" ;
+cmd_return      = "return" [ expressao ] ";" ;
+
+(* Emite uma instrução/primordial da VM, ex.: instr LOAD(R0, 42); *)
+cmd_instr       = "instr" ident "(" [ lista_args ] ")" ";" ;
+
+(* ---------- Atribuições e lvalues ---------- *)
+
+cmd_atribuicao  = lista_atr ";" ;
+lista_atr       = atr { "," atr } ;
+atr             = lvalue "=" expressao ;
+
+lvalue          = ident
+                | ident "[" expressao "]"      (* vetor/memória *)
+                ;
+
+(* ---------- Expressões (precedência) ---------- *)
+
+expressao       = atrib ;
+
+atrib           = log_ou [ "=" atrib ] ;        (* '=' é direita-associativo *)
+
+log_ou          = log_e { "||" log_e } ;
+log_e           = igualdade { "&&" igualdade } ;
+
+igualdade       = rel { ( "==" | "!=" ) rel } ;
+rel             = soma { ( "<" | "<=" | ">" | ">=" ) soma } ;
+soma            = termo { ( "+" | "-" ) termo } ;
+termo           = unario { ( "*" | "/" | "%" ) unario } ;
+
+unario          = [ "!" | "-" | "+" ] unario | primario ;
+
+primario        = literal
+                | lvalue
+                | chamada
+                | "(" expressao ")"
+                ;
+
+chamada         = ident "(" [ lista_args ] ")" ;
+lista_args      = expressao { "," expressao } ;
+
+literal         = inteiro | booleano | string ;
+
+(* ---------- Léxico (tokens) ---------- *)
+
+ident           = letra { letra | digito | "_" } ;
+inteiro         = "0" | ( digito_nz { digito } ) ;
+booleano        = "true" | "false" ;
+string          = "\"" { caractere_string } "\"" ;
+
+letra           = "A"…"Z" | "a"…"z" ;
+digito          = "0"…"9" ;
+digito_nz       = "1"…"9" ;
+
+caractere_string = ? qualquer caractere exceto " ou \ ou nova-linha ? 
+                  | "\\" ( "\"" | "\\" | "n" | "t" | "r" ) ;
+
+(* ---------- Espaços e comentários ---------- *)
+(* Ignorar: espaço, tab, nova-linha, comentários de linha e bloco *)
+WS              = ( " " | "\t" | "\r" | "\n" ) ;
+coment_linha    = "//" { ? não-nova-linha ? } ( "\n" | EOF ) ;
+coment_bloco    = "/*" { ? qualquer caractere ? } "*/" ;

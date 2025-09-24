@@ -1,0 +1,10 @@
+# build & tools (futuro)
+build/
+dist/
+*.o
+*.out
+*.exe
+*.csv
+*.log
+*.swp
+.DS_Store
