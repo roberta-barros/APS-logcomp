@@ -1,0 +1,35 @@
+// Flame — exemplo: controle simples de sauna com histerese e segurança
+
+sensor TEMPERATURA: numero;
+sensor PORTA_ABERTA: logico;
+
+atuador AQUECEDOR: numero;   // 0..10
+atuador EXAUSTOR: logico;    // verdadeiro/falso
+
+constante ALVO: numero = 80;
+constante HISTERESIS: numero = 2;
+
+inicio
+  // Segurança imediata
+  se (PORTA_ABERTA) entao
+    AQUECEDOR = 0;
+    EXAUSTOR = verdadeiro;
+    mostrar("PORTA ABERTA — aquecedor OFF");
+  fimse;
+
+  enquanto (nao PORTA_ABERTA) faca
+    se (TEMPERATURA < (ALVO - HISTERESIS)) entao
+      AQUECEDOR = 8;
+      EXAUSTOR = falso;
+    senao se (TEMPERATURA > (ALVO + HISTERESIS)) entao
+      AQUECEDOR = 0;
+      EXAUSTOR = verdadeiro;
+    senao
+      AQUECEDOR = 3;
+      EXAUSTOR = falso;
+    fimse;
+
+    mostrar("T=", TEMPERATURA, "°C | Pot=", AQUECEDOR);
+    esperar(1000);
+  fimenquanto;
+fim;
