@@ -1,0 +1,18 @@
+// Ajusta potência e aquece
+potencia 60;
+aquecer 30s;
+
+// Variável simples
+set alvo = temp;
+
+// Condicional
+se (alvo < temp) : {
+  imprimir "mais quente";
+} senao : {
+  imprimir "igual ou mais frio";
+}
+
+// Loop infinito (apenas para teste de sintaxe)
+enquanto sempre : {
+  imprimir alvo;
+}

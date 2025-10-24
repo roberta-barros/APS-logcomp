@@ -1,0 +1,4 @@
+# Erro
+
+potencia 50
+aquecer 10s;   // faltou ';' na linha anterior de proposito

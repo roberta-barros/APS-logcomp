@@ -1,0 +1,7 @@
+# Exemplo com comparação por peso
+set p = peso;
+se (p >= 200) : {
+  imprimir "objeto pesado";
+} senao : {
+  imprimir "objeto leve";
+}

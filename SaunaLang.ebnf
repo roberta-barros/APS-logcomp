@@ -1,0 +1,60 @@
+(* =========================
+   SaunaLang — EBNF
+   ========================= *)
+
+programa       = { declaracao } EOF ;
+
+declaracao     = acao ";"
+               | atribuicao ";"
+               | if_stmt
+               | while_stmt
+               | comentario
+               ;
+
+(* ---------- Ações ---------- *)
+acao           = "aquecer" tempo
+               | "potencia" numero
+               | "imprimir" saida
+               ;
+
+saida          = string | ident | sensor ;
+
+(* ---------- Variáveis ---------- *)
+atribuicao     = "set" ident "=" expr ;
+
+(* ---------- Controle de fluxo ---------- *)
+if_stmt        = "se" cond ":" bloco [ "senao" ":" bloco ] ;
+while_stmt     = "enquanto" loop_cond ":" bloco ;
+bloco          = "{" { declaracao } "}" ;
+
+(* ---------- Condições ---------- *)
+cond           = pred { ( "e" | "ou" ) pred } ;
+pred           = comparacao ;
+
+comparacao     = lado_esq comparador lado_dir ;
+lado_esq       = ident | sensor ;
+lado_dir       = ident | sensor | numero ;
+comparador     = "==" | "!=" | "<" | "<=" | ">" | ">=" ;
+
+loop_cond      = "sempre" | cond ;
+
+(* ---------- Léxico ---------- *)
+expr           = numero | ident | sensor ;
+sensor         = "temp" | "peso" ;
+tempo          = numero "s" ;
+
+comentario     = "#"  { caractere_que_nao_quebra_linha } ( "\n" | EOF )
+               | "//" { caractere_que_nao_quebra_linha } ( "\n" | EOF )
+               ;
+
+string         = "\"" { caractere_sem_aspas_ou_escape | escape } "\"" ;
+escape         = "\\" ( "\"" | "\\" | "n" | "t" ) ;
+
+ident          = letra { letra | digito | "_" } ;
+numero         = [ "+" | "-" ]? DIGITO { DIGITO } ;
+
+letra          = "A" | ... | "Z" | "a" | ... | "z" ;
+DIGITO         = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+
+caractere_que_nao_quebra_linha = ? qualquer caractere exceto "\n" ? ;
+caractere_sem_aspas_ou_escape  = ? qualquer caractere exceto "\"" e "\\" ? ;
