@@ -69,12 +69,36 @@
   #include <stdio.h>
   #include <stdlib.h>
   #include <string.h>
+  #include "saunavm.h"
+  
   extern int yylex(void);
   void yyerror(const char *s);
   extern int yylineno;
   extern FILE *yyin;
+  
+  /* VM global */
+  SaunaVM vm;
+  
+  /* Contadores para labels únicos */
+  static int label_counter = 0;
+  
+  /* Gera nome de label único */
+  static char* new_label(const char* prefix) {
+    static char buf[64];
+    snprintf(buf, sizeof(buf), "%s_%d", prefix, label_counter++);
+    return buf;
+  }
+  
+  /* Pilha de contexto para loops e ifs */
+  #define MAX_CONTEXT 64
+  static char loop_start[MAX_CONTEXT][64];
+  static char loop_end[MAX_CONTEXT][64];
+  static char if_else[MAX_CONTEXT][64];
+  static char if_end[MAX_CONTEXT][64];
+  static int loop_depth = 0;
+  static int if_depth = 0;
 
-#line 78 "parser.tab.c"
+#line 102 "parser.tab.c"
 
 
 
@@ -145,17 +169,25 @@ enum yysymbol_kind_t
   YYSYMBOL_saida = 37,                     /* saida  */
   YYSYMBOL_atribuicao = 38,                /* atribuicao  */
   YYSYMBOL_if_stmt = 39,                   /* if_stmt  */
-  YYSYMBOL_while_stmt = 40,                /* while_stmt  */
-  YYSYMBOL_bloco = 41,                     /* bloco  */
-  YYSYMBOL_lista_declaracoes = 42,         /* lista_declaracoes  */
-  YYSYMBOL_loop_cond = 43,                 /* loop_cond  */
-  YYSYMBOL_cond = 44,                      /* cond  */
-  YYSYMBOL_comparacao = 45,                /* comparacao  */
-  YYSYMBOL_lado_esq = 46,                  /* lado_esq  */
-  YYSYMBOL_lado_dir = 47,                  /* lado_dir  */
-  YYSYMBOL_expr = 48,                      /* expr  */
-  YYSYMBOL_numero = 49,                    /* numero  */
-  YYSYMBOL_tempo = 50                      /* tempo  */
+  YYSYMBOL_if_start = 40,                  /* if_start  */
+  YYSYMBOL_if_end_simple = 41,             /* if_end_simple  */
+  YYSYMBOL_if_else_mark = 42,              /* if_else_mark  */
+  YYSYMBOL_if_end_else = 43,               /* if_end_else  */
+  YYSYMBOL_while_stmt = 44,                /* while_stmt  */
+  YYSYMBOL_while_start = 45,               /* while_start  */
+  YYSYMBOL_while_end = 46,                 /* while_end  */
+  YYSYMBOL_bloco = 47,                     /* bloco  */
+  YYSYMBOL_lista_declaracoes = 48,         /* lista_declaracoes  */
+  YYSYMBOL_loop_cond = 49,                 /* loop_cond  */
+  YYSYMBOL_cond = 50,                      /* cond  */
+  YYSYMBOL_cond_or_marker = 51,            /* cond_or_marker  */
+  YYSYMBOL_comparacao = 52,                /* comparacao  */
+  YYSYMBOL_comparador = 53,                /* comparador  */
+  YYSYMBOL_lado_esq = 54,                  /* lado_esq  */
+  YYSYMBOL_lado_dir = 55,                  /* lado_dir  */
+  YYSYMBOL_expr = 56,                      /* expr  */
+  YYSYMBOL_numero = 57,                    /* numero  */
+  YYSYMBOL_tempo = 58                      /* tempo  */
 };
 typedef enum yysymbol_kind_t yysymbol_kind_t;
 
@@ -483,16 +515,16 @@ union yyalloc
 /* YYFINAL -- State number of the termination state.  */
 #define YYFINAL  2
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   76
+#define YYLAST   72
 
 /* YYNTOKENS -- Number of terminals.  */
 #define YYNTOKENS  33
 /* YYNNTS -- Number of nonterminals.  */
-#define YYNNTS  18
+#define YYNNTS  26
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  46
+#define YYNRULES  54
 /* YYNSTATES -- Number of states.  */
-#define YYNSTATES  75
+#define YYNSTATES  78
 
 /* YYMAXUTOK -- Last valid token kind.  */
 #define YYMAXUTOK   280
@@ -542,13 +574,14 @@ static const yytype_int8 yytranslate[] =
 
 #if YYDEBUG
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
-static const yytype_uint8 yyrline[] =
+static const yytype_int16 yyrline[] =
 {
-       0,    44,    44,    45,    49,    50,    51,    52,    56,    57,
-      58,    62,    63,    64,    65,    69,    73,    74,    78,    82,
-      86,    87,    92,    93,    97,    98,    99,   100,   104,   105,
-     106,   107,   108,   109,   113,   114,   115,   119,   120,   121,
-     122,   128,   129,   130,   131,   135,   139
+       0,    71,    71,    72,    76,    77,    78,    79,    83,    88,
+      93,    97,   104,   116,   122,   131,   145,   146,   151,   163,
+     187,   215,   232,   237,   252,   279,   283,   284,   289,   293,
+     297,   302,   307,   308,   312,   316,   354,   355,   356,   357,
+     358,   359,   363,   374,   378,   385,   396,   400,   404,   412,
+     417,   428,   433,   446,   450
 };
 #endif
 
@@ -569,9 +602,11 @@ static const char *const yytname[] =
   "T_AQUECER", "T_POTENCIA", "T_IMPRIMIR", "T_TEMP", "T_PESO", "T_E",
   "T_OU", "T_EQ", "T_NE", "T_LT", "T_LE", "T_GT", "T_GE", "T_ERROR", "';'",
   "'='", "':'", "'{'", "'}'", "'('", "')'", "$accept", "programa",
-  "declaracao", "acao", "saida", "atribuicao", "if_stmt", "while_stmt",
-  "bloco", "lista_declaracoes", "loop_cond", "cond", "comparacao",
-  "lado_esq", "lado_dir", "expr", "numero", "tempo", YY_NULLPTR
+  "declaracao", "acao", "saida", "atribuicao", "if_stmt", "if_start",
+  "if_end_simple", "if_else_mark", "if_end_else", "while_stmt",
+  "while_start", "while_end", "bloco", "lista_declaracoes", "loop_cond",
+  "cond", "cond_or_marker", "comparacao", "comparador", "lado_esq",
+  "lado_dir", "expr", "numero", "tempo", YY_NULLPTR
 };
 
 static const char *
@@ -581,7 +616,7 @@ yysymbol_name (yysymbol_kind_t yysymbol)
 }
 #endif
 
-#define YYPACT_NINF (-45)
+#define YYPACT_NINF (-49)
 
 #define yypact_value_is_default(Yyn) \
   ((Yyn) == YYPACT_NINF)
@@ -595,14 +630,14 @@ yysymbol_name (yysymbol_kind_t yysymbol)
    STATE-NUM.  */
 static const yytype_int8 yypact[] =
 {
-     -45,    32,   -45,     2,     0,    -1,     3,     6,    48,   -45,
-     -15,    -6,   -45,   -45,   -45,   -45,   -45,     2,    20,   -45,
-      47,   -45,     8,   -14,     1,   -45,   -45,   -45,   -45,   -45,
-     -45,   -45,   -45,   -45,   -45,   -45,    -5,     2,     2,    22,
-      44,    44,    44,    44,    44,    44,    22,    46,   -45,   -45,
-       5,   -45,    49,   -45,   -45,   -45,   -45,   -45,   -45,   -45,
-     -45,   -45,   -45,   -45,   -45,   -45,   -45,   -45,   -45,    12,
-      27,   -45,   -45,    22,   -45
+     -49,    33,   -49,   -49,   -49,    -2,     2,    11,    49,   -49,
+       3,     6,   -49,   -49,    -3,    -5,     9,   -49,   -49,   -49,
+     -49,   -49,   -49,   -49,   -49,   -49,   -49,   -49,   -49,   -49,
+     -49,    -3,    13,   -49,    48,   -49,    -4,    17,    45,    -9,
+      -3,   -49,    10,   -49,   -49,   -49,   -49,   -49,   -49,    47,
+      10,   -49,   -49,   -49,   -49,   -49,   -49,   -49,    -3,   -49,
+      29,   -49,   -49,   -49,   -49,   -49,   -49,    32,     8,   -49,
+     -49,   -49,   -49,   -49,    24,    10,   -49,   -49
 };
 
 /* YYDEFACT[STATE-NUM] -- Default reduction number in state STATE-NUM.
@@ -610,28 +645,30 @@ static const yytype_int8 yypact[] =
    means the default is an error.  */
 static const yytype_int8 yydefact[] =
 {
-       2,     0,     1,     0,     0,     0,     0,     0,     0,     3,
-       0,     0,     6,     7,    34,    35,    36,     0,     0,    26,
-       0,    22,     0,    23,     0,    46,     8,    45,     9,    11,
-      12,    13,    14,    10,     4,     5,     0,     0,     0,     0,
-       0,     0,     0,     0,     0,     0,     0,     0,    27,    25,
-      24,    20,    16,    37,    38,    39,    28,    40,    29,    30,
-      31,    32,    33,    18,    42,    43,    44,    15,    41,     0,
-       0,    19,    21,     0,    17
+       2,     0,     1,    18,    23,     0,     0,     0,     0,     3,
+       0,     0,     6,     7,     0,     0,     0,    54,     8,    53,
+       9,    11,    12,    13,    14,    10,     4,     5,    42,    43,
+      44,     0,     0,    32,     0,    28,     0,    29,     0,     0,
+       0,    34,     0,    36,    37,    38,    39,    40,    41,     0,
+       0,    50,    51,    52,    15,    49,    33,    31,     0,    26,
+      19,    45,    46,    47,    35,    48,    24,    30,     0,    20,
+      16,    22,    25,    27,     0,     0,    21,    17
 };
 
 /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-     -45,   -45,   -39,   -45,   -45,   -45,   -45,   -45,   -44,   -45,
-     -45,    -3,   -45,   -45,    31,   -45,    -7,   -45
+     -49,   -49,   -12,   -49,   -49,   -49,   -49,   -49,   -49,   -49,
+     -49,   -49,   -49,   -49,   -48,   -49,   -49,   -15,   -49,   -49,
+     -49,   -49,   -49,   -49,   -31,   -49
 };
 
 /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int8 yydefgoto[] =
 {
-       0,     1,     9,    10,    33,    11,    12,    13,    52,    69,
-      22,    18,    19,    20,    56,    67,    57,    26
+       0,     1,     9,    10,    25,    11,    12,    14,    70,    74,
+      77,    13,    15,    71,    60,    68,    36,    32,    58,    33,
+      49,    34,    64,    54,    20,    18
 };
 
 /* YYTABLE[YYPACT[STATE-NUM]] -- What to do in state STATE-NUM.  If
@@ -639,26 +676,26 @@ static const yytype_int8 yydefgoto[] =
    number is the opposite.  If YYTABLE_NINF, syntax error.  */
 static const yytype_int8 yytable[] =
 {
-      28,    23,    63,    37,    38,    24,    14,    25,    14,    27,
-      21,    34,    37,    38,    36,    15,    16,    15,    16,     3,
-      35,     4,    37,     5,     6,     7,     8,    48,    47,    74,
-      72,    17,     2,    17,    49,    50,    46,    37,    38,     3,
-      68,     4,    71,     5,     6,     7,     8,    27,    39,    27,
-      53,    51,    64,    29,    30,    73,     0,    70,     0,    54,
-      55,    65,    66,    31,    32,     0,    40,    41,    42,    43,
-      44,    45,    58,    59,    60,    61,    62
+      37,    28,    66,    28,    16,    35,    17,    55,    40,    41,
+      29,    30,    29,    30,    19,     3,    39,     4,    65,     5,
+       6,     7,     8,    56,    50,    57,    31,    76,    31,    26,
+      40,    41,    27,     2,    40,    41,    38,    69,    72,    59,
+       3,    42,     4,    67,     5,     6,     7,     8,    19,    40,
+      19,    51,    75,    61,    21,    22,    73,     0,     0,     0,
+      52,    53,    62,    63,    23,    24,     0,    43,    44,    45,
+      46,    47,    48
 };
 
 static const yytype_int8 yycheck[] =
 {
-       7,     4,    46,    17,    18,     6,     6,     4,     6,     3,
-      10,    26,    17,    18,    17,    15,    16,    15,    16,     7,
-      26,     9,    17,    11,    12,    13,    14,    32,    27,    73,
-      69,    31,     0,    31,    37,    38,    28,    17,    18,     7,
-      47,     9,    30,    11,    12,    13,    14,     3,    28,     3,
-       6,    29,     6,     5,     6,    28,    -1,     8,    -1,    15,
-      16,    15,    16,    15,    16,    -1,    19,    20,    21,    22,
-      23,    24,    41,    42,    43,    44,    45
+      15,     6,    50,     6,     6,    10,     4,    38,    17,    18,
+      15,    16,    15,    16,     3,     7,    31,     9,    49,    11,
+      12,    13,    14,    32,    28,    40,    31,    75,    31,    26,
+      17,    18,    26,     0,    17,    18,    27,     8,    30,    29,
+       7,    28,     9,    58,    11,    12,    13,    14,     3,    17,
+       3,     6,    28,     6,     5,     6,    68,    -1,    -1,    -1,
+      15,    16,    15,    16,    15,    16,    -1,    19,    20,    21,
+      22,    23,    24
 };
 
 /* YYSTOS[STATE-NUM] -- The symbol kind of the accessing symbol of
@@ -666,13 +703,13 @@ static const yytype_int8 yycheck[] =
 static const yytype_int8 yystos[] =
 {
        0,    34,     0,     7,     9,    11,    12,    13,    14,    35,
-      36,    38,    39,    40,     6,    15,    16,    31,    44,    45,
-      46,    10,    43,    44,     6,     4,    50,     3,    49,     5,
-       6,    15,    16,    37,    26,    26,    44,    17,    18,    28,
-      19,    20,    21,    22,    23,    24,    28,    27,    32,    44,
-      44,    29,    41,     6,    15,    16,    47,    49,    47,    47,
-      47,    47,    47,    41,     6,    15,    16,    48,    49,    42,
-       8,    30,    35,    28,    41
+      36,    38,    39,    44,    40,    45,     6,     4,    58,     3,
+      57,     5,     6,    15,    16,    37,    26,    26,     6,    15,
+      16,    31,    50,    52,    54,    10,    49,    50,    27,    50,
+      17,    18,    28,    19,    20,    21,    22,    23,    24,    53,
+      28,     6,    15,    16,    56,    57,    32,    50,    51,    29,
+      47,     6,    15,    16,    55,    57,    47,    50,    48,     8,
+      41,    46,    30,    35,    42,    28,    47,    43
 };
 
 /* YYR1[RULE-NUM] -- Symbol kind of the left-hand side of rule RULE-NUM.  */
@@ -680,19 +717,21 @@ static const yytype_int8 yyr1[] =
 {
        0,    33,    34,    34,    35,    35,    35,    35,    36,    36,
       36,    37,    37,    37,    37,    38,    39,    39,    40,    41,
-      42,    42,    43,    43,    44,    44,    44,    44,    45,    45,
-      45,    45,    45,    45,    46,    46,    46,    47,    47,    47,
-      47,    48,    48,    48,    48,    49,    50
+      42,    43,    44,    45,    46,    47,    48,    48,    49,    49,
+      50,    50,    50,    50,    51,    52,    53,    53,    53,    53,
+      53,    53,    54,    54,    54,    55,    55,    55,    55,    56,
+      56,    56,    56,    57,    58
 };
 
 /* YYR2[RULE-NUM] -- Number of symbols on the right-hand side of rule RULE-NUM.  */
 static const yytype_int8 yyr2[] =
 {
        0,     2,     0,     2,     2,     2,     1,     1,     2,     2,
-       2,     1,     1,     1,     1,     4,     4,     7,     4,     3,
-       0,     2,     1,     1,     3,     3,     1,     3,     3,     3,
-       3,     3,     3,     3,     1,     1,     1,     1,     1,     1,
-       1,     1,     1,     1,     1,     1,     1
+       2,     1,     1,     1,     1,     4,     6,    10,     0,     0,
+       0,     0,     6,     0,     0,     3,     0,     2,     1,     1,
+       4,     3,     1,     3,     0,     3,     1,     1,     1,     1,
+       1,     1,     1,     1,     1,     1,     1,     1,     1,     1,
+       1,     1,     1,     1,     1
 };
 
 
@@ -1425,32 +1464,432 @@ yyreduce:
   YY_REDUCE_PRINT (yyn);
   switch (yyn)
     {
-  case 41: /* expr: numero  */
-#line 128 "parser.y"
-                         { (yyval.ival) = (yyvsp[0].ival); }
-#line 1432 "parser.tab.c"
+  case 8: /* acao: T_AQUECER tempo  */
+#line 84 "parser.y"
+    {
+      /* Gera instrução HEAT */
+      svm_add_instruction(&vm, OP_HEAT, (yyvsp[0].ival), 0, 0);
+    }
+#line 1474 "parser.tab.c"
     break;
 
-  case 42: /* expr: T_IDENT  */
-#line 129 "parser.y"
-                         { (yyval.ival) = 0; }
-#line 1438 "parser.tab.c"
+  case 9: /* acao: T_POTENCIA numero  */
+#line 89 "parser.y"
+    {
+      /* Gera instrução POW */
+      svm_add_instruction(&vm, OP_POW, (yyvsp[0].ival), 0, 0);
+    }
+#line 1483 "parser.tab.c"
     break;
 
-  case 43: /* expr: T_TEMP  */
-#line 130 "parser.y"
-                         { (yyval.ival) = 0; }
-#line 1444 "parser.tab.c"
+  case 11: /* saida: T_STR  */
+#line 98 "parser.y"
+    {
+      /* Adiciona string ao pool e gera PRINTS */
+      int idx = svm_add_string(&vm, (yyvsp[0].sval));
+      svm_add_instruction(&vm, OP_PRINTS, idx, 0, 0);
+      free((yyvsp[0].sval));
+    }
+#line 1494 "parser.tab.c"
     break;
 
-  case 44: /* expr: T_PESO  */
-#line 131 "parser.y"
-                         { (yyval.ival) = 0; }
-#line 1450 "parser.tab.c"
+  case 12: /* saida: T_IDENT  */
+#line 105 "parser.y"
+    {
+      /* Carrega variável em R0 e imprime */
+      int var_idx = svm_get_variable_idx(&vm, (yyvsp[0].sval));
+      if (var_idx < 0) {
+        fprintf(stderr, "[parser] Variável não definida: %s\n", (yyvsp[0].sval));
+        var_idx = svm_add_variable(&vm, (yyvsp[0].sval));
+      }
+      svm_add_instruction(&vm, OP_LOADV, REG_R0, var_idx, 0);
+      svm_add_instruction(&vm, OP_PRINT, REG_R0, 0, 0);
+      free((yyvsp[0].sval));
+    }
+#line 1510 "parser.tab.c"
+    break;
+
+  case 13: /* saida: T_TEMP  */
+#line 117 "parser.y"
+    {
+      /* Carrega sensor TEMP em R0 e imprime */
+      svm_add_instruction(&vm, OP_LOAD, REG_R0, SENSOR_TEMP, 0);
+      svm_add_instruction(&vm, OP_PRINT, REG_R0, 0, 0);
+    }
+#line 1520 "parser.tab.c"
+    break;
+
+  case 14: /* saida: T_PESO  */
+#line 123 "parser.y"
+    {
+      /* Carrega sensor PESO em R0 e imprime */
+      svm_add_instruction(&vm, OP_LOAD, REG_R0, SENSOR_PESO, 0);
+      svm_add_instruction(&vm, OP_PRINT, REG_R0, 0, 0);
+    }
+#line 1530 "parser.tab.c"
+    break;
+
+  case 15: /* atribuicao: T_SET T_IDENT '=' expr  */
+#line 132 "parser.y"
+    {
+      /* Cria variável se não existe e armazena valor de R0 */
+      int var_idx = svm_get_variable_idx(&vm, (yyvsp[-2].sval));
+      if (var_idx < 0) {
+        var_idx = svm_add_variable(&vm, (yyvsp[-2].sval));
+      }
+      /* expr já deixou resultado em R0 */
+      svm_add_instruction(&vm, OP_STORE, var_idx, REG_R0, 0);
+      free((yyvsp[-2].sval));
+    }
+#line 1545 "parser.tab.c"
+    break;
+
+  case 18: /* if_start: %empty  */
+#line 151 "parser.y"
+    {
+      /* Prepara labels para if */
+      char* else_lbl = new_label("else");
+      char* end_lbl = new_label("endif");
+      strcpy(if_else[if_depth], else_lbl);
+      strcpy(if_end[if_depth], end_lbl);
+      if_depth++;
+    }
+#line 1558 "parser.tab.c"
+    break;
+
+  case 19: /* if_end_simple: %empty  */
+#line 163 "parser.y"
+    {
+      /* Marca fim do if (sem else) - else e endif são o mesmo ponto */
+      if_depth--;
+      int addr = vm.program_size;
+      svm_add_label(&vm, if_else[if_depth]);
+      
+      /* Resolve saltos pendentes que apontam para este if */
+      for (int i = 0; i < vm.program_size; i++) {
+        if (vm.program[i].arg1 == -2) {
+          switch (vm.program[i].op) {
+            case OP_JEQ: case OP_JNE: case OP_JLT: 
+            case OP_JLE: case OP_JGT: case OP_JGE:
+              vm.program[i].arg1 = addr;
+              break;
+            default:
+              break;
+          }
+        }
+      }
+    }
+#line 1583 "parser.tab.c"
+    break;
+
+  case 20: /* if_else_mark: %empty  */
+#line 187 "parser.y"
+    {
+      /* Primeiro, resolve os saltos da condição para apontar ao else */
+      int else_addr = vm.program_size + 1;  /* +1 porque vamos adicionar JMP antes */
+      
+      /* Salta para endif após bloco then */
+      svm_add_instruction(&vm, OP_JMP, -3, 0, 0);  /* -3 = marcador para endif */
+      
+      /* Marca label else */
+      svm_add_label(&vm, if_else[if_depth - 1]);
+      
+      /* Resolve saltos pendentes da condição para apontar aqui */
+      for (int i = 0; i < vm.program_size; i++) {
+        if (vm.program[i].arg1 == -2) {
+          switch (vm.program[i].op) {
+            case OP_JEQ: case OP_JNE: case OP_JLT: 
+            case OP_JLE: case OP_JGT: case OP_JGE:
+              vm.program[i].arg1 = else_addr;
+              break;
+            default:
+              break;
+          }
+        }
+      }
+    }
+#line 1612 "parser.tab.c"
+    break;
+
+  case 21: /* if_end_else: %empty  */
+#line 215 "parser.y"
+    {
+      if_depth--;
+      /* Marca endif */
+      int endif_addr = vm.program_size;
+      svm_add_label(&vm, if_end[if_depth]);
+      
+      /* Resolve o JMP -3 pendente (salto do then para endif) */
+      for (int i = vm.program_size - 1; i >= 0; i--) {
+        if (vm.program[i].op == OP_JMP && vm.program[i].arg1 == -3) {
+          vm.program[i].arg1 = endif_addr;
+          break;
+        }
+      }
+    }
+#line 1631 "parser.tab.c"
+    break;
+
+  case 23: /* while_start: %empty  */
+#line 237 "parser.y"
+    {
+      /* Prepara labels para while */
+      char* start_lbl = new_label("while");
+      char* end_lbl = new_label("endwhile");
+      strcpy(loop_start[loop_depth], start_lbl);
+      strcpy(loop_end[loop_depth], end_lbl);
+      loop_depth++;
+      
+      /* Marca início do loop */
+      svm_add_label(&vm, start_lbl);
+    }
+#line 1647 "parser.tab.c"
+    break;
+
+  case 24: /* while_end: %empty  */
+#line 252 "parser.y"
+    {
+      loop_depth--;
+      /* Salta de volta para o início */
+      int start_addr = svm_get_label_addr(&vm, loop_start[loop_depth]);
+      svm_add_instruction(&vm, OP_JMP, start_addr, 0, 0);
+      
+      /* Marca fim do loop */
+      int end_addr = vm.program_size;
+      svm_add_label(&vm, loop_end[loop_depth]);
+      
+      /* Resolve saltos pendentes da condição (marcador -4) para apontar para endwhile */
+      for (int i = 0; i < vm.program_size; i++) {
+        if (vm.program[i].arg1 == -4) {
+          switch (vm.program[i].op) {
+            case OP_JEQ: case OP_JNE: case OP_JLT: 
+            case OP_JLE: case OP_JGT: case OP_JGE:
+              vm.program[i].arg1 = end_addr;
+              break;
+            default:
+              break;
+          }
+        }
+      }
+    }
+#line 1676 "parser.tab.c"
+    break;
+
+  case 28: /* loop_cond: T_SEMPRE  */
+#line 290 "parser.y"
+    {
+      /* Loop infinito - não gera condição de saída */
+    }
+#line 1684 "parser.tab.c"
+    break;
+
+  case 30: /* cond: cond T_OU cond_or_marker cond  */
+#line 298 "parser.y"
+    {
+      /* OR: se o primeiro foi verdadeiro, pula para o corpo */
+      /* Implementação simplificada: avalia ambos */
+    }
+#line 1693 "parser.tab.c"
+    break;
+
+  case 31: /* cond: cond T_E cond  */
+#line 303 "parser.y"
+    {
+      /* AND: ambas condições devem ser verdadeiras */
+      /* As condições já geraram os saltos apropriados */
+    }
+#line 1702 "parser.tab.c"
+    break;
+
+  case 35: /* comparacao: lado_esq comparador lado_dir  */
+#line 317 "parser.y"
+    {
+      /* lado_esq está em R0, lado_dir em R1 */
+      /* Gera CMP e salto condicional */
+      svm_add_instruction(&vm, OP_CMP, REG_R0, REG_R1, 0);
+      
+      /* Usa marcador diferente para while (-4) vs if (-2) */
+      int marker;
+      if (loop_depth > 0 && if_depth == 0) {
+        marker = -4;  /* while */
+      } else {
+        marker = -2;  /* if */
+      }
+      
+      switch ((yyvsp[-1].cmp_op)) {
+        case T_EQ:  /* == : salta se NE (não igual) */
+          svm_add_instruction(&vm, OP_JNE, marker, 0, 0);
+          break;
+        case T_NE:  /* != : salta se EQ */
+          svm_add_instruction(&vm, OP_JEQ, marker, 0, 0);
+          break;
+        case T_LT:  /* < : salta se GE */
+          svm_add_instruction(&vm, OP_JGE, marker, 0, 0);
+          break;
+        case T_LE:  /* <= : salta se GT */
+          svm_add_instruction(&vm, OP_JGT, marker, 0, 0);
+          break;
+        case T_GT:  /* > : salta se LE */
+          svm_add_instruction(&vm, OP_JLE, marker, 0, 0);
+          break;
+        case T_GE:  /* >= : salta se LT */
+          svm_add_instruction(&vm, OP_JLT, marker, 0, 0);
+          break;
+      }
+    }
+#line 1741 "parser.tab.c"
+    break;
+
+  case 36: /* comparador: T_EQ  */
+#line 354 "parser.y"
+         { (yyval.cmp_op) = T_EQ; }
+#line 1747 "parser.tab.c"
+    break;
+
+  case 37: /* comparador: T_NE  */
+#line 355 "parser.y"
+         { (yyval.cmp_op) = T_NE; }
+#line 1753 "parser.tab.c"
+    break;
+
+  case 38: /* comparador: T_LT  */
+#line 356 "parser.y"
+         { (yyval.cmp_op) = T_LT; }
+#line 1759 "parser.tab.c"
+    break;
+
+  case 39: /* comparador: T_LE  */
+#line 357 "parser.y"
+         { (yyval.cmp_op) = T_LE; }
+#line 1765 "parser.tab.c"
+    break;
+
+  case 40: /* comparador: T_GT  */
+#line 358 "parser.y"
+         { (yyval.cmp_op) = T_GT; }
+#line 1771 "parser.tab.c"
+    break;
+
+  case 41: /* comparador: T_GE  */
+#line 359 "parser.y"
+         { (yyval.cmp_op) = T_GE; }
+#line 1777 "parser.tab.c"
+    break;
+
+  case 42: /* lado_esq: T_IDENT  */
+#line 364 "parser.y"
+    {
+      /* Carrega variável em R0 */
+      int var_idx = svm_get_variable_idx(&vm, (yyvsp[0].sval));
+      if (var_idx < 0) {
+        fprintf(stderr, "[parser] Variável não definida: %s\n", (yyvsp[0].sval));
+        var_idx = svm_add_variable(&vm, (yyvsp[0].sval));
+      }
+      svm_add_instruction(&vm, OP_LOADV, REG_R0, var_idx, 0);
+      free((yyvsp[0].sval));
+    }
+#line 1792 "parser.tab.c"
+    break;
+
+  case 43: /* lado_esq: T_TEMP  */
+#line 375 "parser.y"
+    {
+      svm_add_instruction(&vm, OP_LOAD, REG_R0, SENSOR_TEMP, 0);
+    }
+#line 1800 "parser.tab.c"
+    break;
+
+  case 44: /* lado_esq: T_PESO  */
+#line 379 "parser.y"
+    {
+      svm_add_instruction(&vm, OP_LOAD, REG_R0, SENSOR_PESO, 0);
+    }
+#line 1808 "parser.tab.c"
+    break;
+
+  case 45: /* lado_dir: T_IDENT  */
+#line 386 "parser.y"
+    {
+      /* Carrega variável em R1 */
+      int var_idx = svm_get_variable_idx(&vm, (yyvsp[0].sval));
+      if (var_idx < 0) {
+        fprintf(stderr, "[parser] Variável não definida: %s\n", (yyvsp[0].sval));
+        var_idx = svm_add_variable(&vm, (yyvsp[0].sval));
+      }
+      svm_add_instruction(&vm, OP_LOADV, REG_R1, var_idx, 0);
+      free((yyvsp[0].sval));
+    }
+#line 1823 "parser.tab.c"
+    break;
+
+  case 46: /* lado_dir: T_TEMP  */
+#line 397 "parser.y"
+    {
+      svm_add_instruction(&vm, OP_LOAD, REG_R1, SENSOR_TEMP, 0);
+    }
+#line 1831 "parser.tab.c"
+    break;
+
+  case 47: /* lado_dir: T_PESO  */
+#line 401 "parser.y"
+    {
+      svm_add_instruction(&vm, OP_LOAD, REG_R1, SENSOR_PESO, 0);
+    }
+#line 1839 "parser.tab.c"
+    break;
+
+  case 48: /* lado_dir: numero  */
+#line 405 "parser.y"
+    {
+      svm_add_instruction(&vm, OP_SET, REG_R1, (yyvsp[0].ival), 0);
+    }
+#line 1847 "parser.tab.c"
+    break;
+
+  case 49: /* expr: numero  */
+#line 413 "parser.y"
+    {
+      svm_add_instruction(&vm, OP_SET, REG_R0, (yyvsp[0].ival), 0);
+      (yyval.ival) = (yyvsp[0].ival);
+    }
+#line 1856 "parser.tab.c"
+    break;
+
+  case 50: /* expr: T_IDENT  */
+#line 418 "parser.y"
+    {
+      int var_idx = svm_get_variable_idx(&vm, (yyvsp[0].sval));
+      if (var_idx < 0) {
+        fprintf(stderr, "[parser] Variável não definida: %s\n", (yyvsp[0].sval));
+        var_idx = svm_add_variable(&vm, (yyvsp[0].sval));
+      }
+      svm_add_instruction(&vm, OP_LOADV, REG_R0, var_idx, 0);
+      (yyval.ival) = 0;
+      free((yyvsp[0].sval));
+    }
+#line 1871 "parser.tab.c"
+    break;
+
+  case 51: /* expr: T_TEMP  */
+#line 429 "parser.y"
+    {
+      svm_add_instruction(&vm, OP_LOAD, REG_R0, SENSOR_TEMP, 0);
+      (yyval.ival) = 0;
+    }
+#line 1880 "parser.tab.c"
+    break;
+
+  case 52: /* expr: T_PESO  */
+#line 434 "parser.y"
+    {
+      svm_add_instruction(&vm, OP_LOAD, REG_R0, SENSOR_PESO, 0);
+      (yyval.ival) = 0;
+    }
+#line 1889 "parser.tab.c"
     break;
 
 
-#line 1454 "parser.tab.c"
+#line 1893 "parser.tab.c"
 
       default: break;
     }
@@ -1674,28 +2113,122 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 142 "parser.y"
+#line 453 "parser.y"
 
 
 void yyerror(const char *s) {
   fprintf(stderr, "[parser] erro de sintaxe na linha %d: %s\n", yylineno, s);
 }
 
+/* Resolve saltos pendentes */
+static void resolve_jumps(SaunaVM* vm) {
+  for (int i = 0; i < vm->program_size; i++) {
+    SVM_Instruction* instr = &vm->program[i];
+    
+    /* Saltos com endereço -2 apontam para o label else/endif mais próximo */
+    if (instr->arg1 == -2) {
+      switch (instr->op) {
+        case OP_JMP:
+        case OP_JEQ:
+        case OP_JNE:
+        case OP_JLT:
+        case OP_JLE:
+        case OP_JGT:
+        case OP_JGE:
+          /* Procura o próximo label após esta instrução */
+          for (int j = 0; j < vm->label_count; j++) {
+            if (vm->labels[j].address > i) {
+              instr->arg1 = vm->labels[j].address;
+              break;
+            }
+          }
+          /* Se não encontrou, aponta para o fim do programa */
+          if (instr->arg1 == -2) {
+            instr->arg1 = vm->program_size;
+          }
+          break;
+        default:
+          break;
+      }
+    }
+  }
+}
+
 /* Driver */
 int main(int argc, char** argv) {
-  if (argc != 2) {
-    fprintf(stderr, "Uso: %s <arquivo.snl>\n", argv[0]);
+  int show_asm = 0;
+  int show_state = 0;
+  char* filename = NULL;
+  
+  /* Parse argumentos */
+  for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
+      show_asm = 1;
+      show_state = 1;
+    } else if (strcmp(argv[i], "-a") == 0 || strcmp(argv[i], "--asm") == 0) {
+      show_asm = 1;
+    } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+      printf("Uso: %s [opções] <arquivo.snl>\n", argv[0]);
+      printf("Opções:\n");
+      printf("  -d, --debug   Mostra assembly gerado e estado final\n");
+      printf("  -a, --asm     Mostra apenas assembly gerado\n");
+      printf("  -h, --help    Mostra esta ajuda\n");
+      return 0;
+    } else {
+      filename = argv[i];
+    }
+  }
+  
+  if (!filename) {
+    fprintf(stderr, "Uso: %s [opções] <arquivo.snl>\n", argv[0]);
     return 1;
   }
-  FILE* f = fopen(argv[1], "r");
-  if (!f) { perror("Erro ao abrir arquivo"); return 1; }
+  
+  FILE* f = fopen(filename, "r");
+  if (!f) { 
+    perror("Erro ao abrir arquivo"); 
+    return 1; 
+  }
+  
+  /* Inicializa VM */
+  svm_init(&vm);
+  
+  /* Parse e geração de código */
   yyin = f;
   int ret = yyparse();
-  if (ret == 0) {
-    printf("OK: análise léxica e sintática concluída.\n");
-  } else {
-    printf("Falha: erros de sintaxe encontrados.\n");
-  }
   fclose(f);
-  return ret;
+  
+  if (ret != 0) {
+    printf("Falha: erros de sintaxe encontrados.\n");
+    return ret;
+  }
+  
+  /* Adiciona HALT no final se não existe */
+  if (vm.program_size == 0 || vm.program[vm.program_size - 1].op != OP_HALT) {
+    svm_add_instruction(&vm, OP_HALT, 0, 0, 0);
+  }
+  
+  /* Resolve saltos pendentes */
+  resolve_jumps(&vm);
+  
+  printf("OK: análise léxica e sintática concluída.\n");
+  printf("Programa compilado: %d instruções\n\n", vm.program_size);
+  
+  /* Mostra assembly se solicitado */
+  if (show_asm) {
+    svm_disassemble(&vm);
+    printf("\n");
+  }
+  
+  /* Executa */
+  printf("=== Executando na SaunaVM ===\n\n");
+  svm_run(&vm, 100000);  /* Limite de 100k passos */
+  
+  /* Mostra estado final se solicitado */
+  if (show_state) {
+    printf("\n");
+    svm_print_state(&vm);
+  }
+  
+  return 0;
 }

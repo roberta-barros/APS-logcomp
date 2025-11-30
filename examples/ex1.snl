@@ -1,18 +1,25 @@
-// Ajusta potência e aquece
+// =============================================
+// Exemplo 1: Teste Básico de Ações
+// =============================================
+// Demonstra: potencia, aquecer, variáveis, imprimir
+// Resultado esperado: Aquece a sauna e mostra temperatura
+
+// Define potência inicial
 potencia 60;
+
+// Aquece por 30 segundos
 aquecer 30s;
 
-// Variável simples
+// Cria variável com valor da temperatura
 set alvo = temp;
 
-// Condicional
-se (alvo < temp) : {
-  imprimir "mais quente";
-} senao : {
-  imprimir "igual ou mais frio";
-}
+// Imprime mensagem e valor
+imprimir "Temperatura após aquecimento:";
+imprimir alvo;
 
-// Loop infinito (apenas para teste de sintaxe)
-enquanto sempre : {
-  imprimir alvo;
+// Condicional simples
+se (alvo < 50) : {
+    imprimir "Sauna ainda fria";
+} senao : {
+    imprimir "Sauna aquecida";
 }

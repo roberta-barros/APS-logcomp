@@ -1,0 +1,40 @@
+// =============================================
+// Exemplo 6: Todos os Operadores de Comparação
+// =============================================
+// Demonstra: ==, !=, <, <=, >, >=
+
+set valor = 50;
+
+imprimir "Testando operadores com valor = 50";
+
+// Teste de igualdade
+se (valor == 50) : {
+    imprimir "OK: valor == 50";
+}
+
+// Teste de diferença
+se (valor != 100) : {
+    imprimir "OK: valor != 100";
+}
+
+// Teste menor que
+se (valor < 100) : {
+    imprimir "OK: valor < 100";
+}
+
+// Teste menor ou igual
+se (valor <= 50) : {
+    imprimir "OK: valor <= 50";
+}
+
+// Teste maior que
+se (valor > 0) : {
+    imprimir "OK: valor > 0";
+}
+
+// Teste maior ou igual
+se (valor >= 50) : {
+    imprimir "OK: valor >= 50";
+}
+
+imprimir "Todos os testes concluidos";

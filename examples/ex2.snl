@@ -1,7 +1,26 @@
-# Exemplo com comparação por peso
+// =============================================
+// Exemplo 2: Comparação por Peso
+// =============================================
+// Demonstra: sensor peso, comparações, condicionais
+
+// Carrega o peso do sensor
 set p = peso;
+
+// Imprime o peso atual
+imprimir "Peso detectado:";
+imprimir p;
+
+// Verifica se é objeto pesado ou leve
 se (p >= 200) : {
-  imprimir "objeto pesado";
+    imprimir "Objeto pesado detectado";
+    potencia 40;
+    aquecer 20s;
 } senao : {
-  imprimir "objeto leve";
+    imprimir "Objeto leve detectado";
+    potencia 70;
+    aquecer 10s;
 }
+
+// Mostra temperatura final
+imprimir "Temperatura final:";
+imprimir temp;

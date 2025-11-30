@@ -1,0 +1,33 @@
+// =============================================
+// Exemplo 5: Aquecimento até Temperatura Alvo
+// =============================================
+// Demonstra: loop enquanto com sensor, comparações
+
+imprimir "Sistema de aquecimento automatico";
+imprimir "Meta: atingir 80 graus";
+
+// Define potência máxima
+potencia 100;
+
+// Mostra temperatura inicial
+imprimir "Temperatura inicial:";
+imprimir temp;
+
+// Aquece enquanto temperatura < 80
+enquanto (temp < 80) : {
+    // Aquece por 10 segundos
+    aquecer 10s;
+    
+    // Mostra progresso
+    imprimir "Aquecendo... Temp atual:";
+    imprimir temp;
+}
+
+// Temperatura atingida
+imprimir "Meta atingida!";
+imprimir "Temperatura final:";
+imprimir temp;
+
+// Reduz potência para manutenção
+potencia 30;
+imprimir "Potencia reduzida para manutencao";

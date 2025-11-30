@@ -1,4 +1,8 @@
-# Erro
+// =============================================
+// Exemplo 3: Erro de Sintaxe
+// =============================================
+// Este arquivo contém um erro de sintaxe intencional
+// para demonstrar a detecção de erros do parser
 
 potencia 50
 aquecer 10s;   // faltou ';' na linha anterior de proposito

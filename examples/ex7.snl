@@ -1,0 +1,63 @@
+// =============================================
+// Exemplo 7: Simulação Completa de Sessão
+// =============================================
+
+imprimir "=== SISTEMA DE CONTROLE DE SAUNA ===";
+imprimir "";
+
+// Fase 1: Pre-aquecimento
+imprimir "Fase 1: Pre-aquecimento";
+potencia 100;
+aquecer 20s;
+imprimir "Temperatura apos pre-aquecimento:";
+imprimir temp;
+
+// Fase 2: Aquecimento principal
+imprimir "";
+imprimir "Fase 2: Aquecimento principal";
+
+// Verifica peso para ajustar potência
+se (peso > 150) : {
+    imprimir "Carga pesada - aumentando tempo";
+    potencia 80;
+    aquecer 40s;
+} senao : {
+    imprimir "Carga normal";
+    potencia 70;
+    aquecer 30s;
+}
+
+imprimir "Temperatura atual:";
+imprimir temp;
+
+// Fase 3: Estabilização
+imprimir "";
+imprimir "Fase 3: Estabilizacao";
+
+// Mantém até atingir 100 graus ou estabilizar
+enquanto (temp < 100) : {
+    potencia 60;
+    aquecer 5s;
+}
+
+imprimir "Temperatura estabilizada:";
+imprimir temp;
+
+// Fase 4: Manutenção
+imprimir "";
+imprimir "Fase 4: Manutencao";
+potencia 30;
+aquecer 15s;
+
+// Fase 5: Resfriamento
+imprimir "";
+imprimir "Fase 5: Resfriamento";
+potencia 0;
+aquecer 10s;
+
+// Relatório final
+imprimir "";
+imprimir "Temperatura final:";
+imprimir temp;
+imprimir "Peso do objeto:";
+imprimir peso;
